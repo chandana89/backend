@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ConfigModule } from '@nestjs/config';
+import { ChatGPTModule } from './modules/chatgpt/chatgpt.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ConfigModule } from '@nestjs/config';
       isGlobal: true, // makes env variables accessible globally
     }),
     DashboardModule,
+    ChatGPTModule,
   ],
 })
 export class AppModule {}
