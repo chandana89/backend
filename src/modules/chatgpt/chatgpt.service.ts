@@ -7,7 +7,7 @@ export class ChatGPTService {
   private readonly apiUrl: string;
 
   constructor() {
-    this.apiKey = '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';
+    this.apiKey = process.env.OPEN_API_KEY || '';
     this.apiUrl = 'https://api.openai.com/v1/conversations';
   }
 
