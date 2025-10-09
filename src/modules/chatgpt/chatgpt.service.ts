@@ -71,7 +71,7 @@ export class ChatGPTService {
     return res.data;
   }
 
-  public async ExtractBeneficialOwnerUsingURL(fileURL: String) {
+  public async ExtractBeneficialOwnerUsingURL(fileURL: String, prompt: string) {
    const data = {
         model: "gpt-5",
         input: [
@@ -84,7 +84,7 @@ export class ChatGPTService {
                     },
                     {
                         "type": "input_text",
-                        "text": "Extract beneficial owners"
+                        "text": prompt
                     }
                 ]
             }

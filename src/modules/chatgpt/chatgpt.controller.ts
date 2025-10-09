@@ -30,10 +30,10 @@ export class ChatGPTController {
     }
 
     @Post('url')
-    public async ExtractBOs(@Req() req: Request, @Body() body: {fileURL: string}) {
+    public async ExtractBOs(@Req() req: Request, @Body() body: {fileURL: string, prompt:string}) {
 
         try {
-            const response = await this.chatGPTService.ExtractBeneficialOwnerUsingURL(body.fileURL);
+            const response = await this.chatGPTService.ExtractBeneficialOwnerUsingURL(body.fileURL, body.prompt);
             return response;
         } catch (e) {
             console.log(`Error: ${e.message}`);
