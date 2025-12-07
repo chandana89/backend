@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ConfigModule } from '@nestjs/config';
 import { ChatGPTModule } from './modules/chatgpt/chatgpt.module';
+import { ChatGateway } from './chat/chat.gateway';
 
 @Module({
   imports: [
@@ -22,5 +23,6 @@ import { ChatGPTModule } from './modules/chatgpt/chatgpt.module';
     DashboardModule,
     ChatGPTModule,
   ],
+  providers: [ChatGateway],
 })
 export class AppModule {}
