@@ -4,6 +4,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ConfigModule } from '@nestjs/config';
 import { ChatGPTModule } from './modules/chatgpt/chatgpt.module';
 import { ChatGateway } from './chat/chat.gateway';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ChatGateway } from './chat/chat.gateway';
     }),
     DashboardModule,
     ChatGPTModule,
+    NotificationsModule,
   ],
   providers: [ChatGateway],
 })
