@@ -5,6 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ChatGPTModule } from './modules/chatgpt/chatgpt.module';
 import { ChatGateway } from './chat/chat.gateway';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { AuthenicateModule } from './modules/authenticate/authenticate.module';
 
 @Module({
   imports: [
@@ -24,7 +25,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
     DashboardModule,
     ChatGPTModule,
     NotificationsModule,
+    AuthenicateModule,
   ],
   providers: [ChatGateway],
 })
-export class AppModule {}
+export class AppModule { }
