@@ -21,4 +21,7 @@ export class User extends BaseEntity {
     emailToLowerCase() {
         this.email = this.email.trim().toLowerCase();
     }
+
+    @Column({ nullable: true })
+    currentChallenge: string;
 }

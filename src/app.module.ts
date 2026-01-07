@@ -6,6 +6,7 @@ import { ChatGPTModule } from './modules/chatgpt/chatgpt.module';
 import { ChatGateway } from './chat/chat.gateway';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { AuthenicateModule } from './modules/authenticate/authenticate.module';
+import { PasskeyModule } from './modules/passkey/passkey.module';
 
 @Module({
   imports: [
@@ -15,7 +16,7 @@ import { AuthenicateModule } from './modules/authenticate/authenticate.module';
       port: 5432,
       username: 'root',
       password: 'root',
-      database: 'portfolio',
+      database: 'sample',
       autoLoadEntities: true,
       synchronize: true, // For dev only!
     }),
@@ -26,6 +27,7 @@ import { AuthenicateModule } from './modules/authenticate/authenticate.module';
     ChatGPTModule,
     NotificationsModule,
     AuthenicateModule,
+    PasskeyModule
   ],
   providers: [ChatGateway],
 })
