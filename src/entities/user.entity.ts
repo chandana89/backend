@@ -22,6 +22,7 @@ export class User extends BaseEntity {
         this.email = this.email.trim().toLowerCase();
     }
 
+    /** Pending passkey registration challenge; cleared once used. */
     @Column({ type: 'varchar', nullable: true })
     currentChallenge: string | null;
 }

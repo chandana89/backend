@@ -25,6 +25,10 @@
 
 [Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
+## Passkeys
+
+Passkey (WebAuthn) registration and sign-in without an email live in `src/modules/passkey`. See [docs/passkey.md](docs/passkey.md) for the endpoints, flows, data model, `.env` settings and known limitations.
+
 ## Project setup
 
 ```bash
