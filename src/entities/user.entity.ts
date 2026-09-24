@@ -22,6 +22,6 @@ export class User extends BaseEntity {
         this.email = this.email.trim().toLowerCase();
     }
 
-    @Column({ nullable: true })
-    currentChallenge: string;
+    @Column({ type: 'varchar', nullable: true })
+    currentChallenge: string | null;
 }

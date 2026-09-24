@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/entities/user.entity';
 import { Repository } from 'typeorm';
@@ -16,7 +16,7 @@ export class AuthenticateService {
 
   public async Login(userName: string, password: string) {
     const user = await this.userRepo.findOne({ where: { email: userName, password } });
-    if (!user) throw new Error(`Invalid credentials`);
+    if (!user) throw new UnauthorizedException('Invalid email or password');
     return user;
   }
 

@@ -16,4 +16,14 @@ export class PasskeyController {
         return this.passkeyService.verifyPasskeyRegistration(body.userName, body.authResp);
     }
 
+    @Post('login')
+    async GetPasskeyLoginOptions(@Body() body: { userName: string }) {
+        return this.passkeyService.getPasskeyLoginOptions(body.userName);
+    }
+
+    @Post('login/verify')
+    async VerifyPasskeyLogin(@Body() body: { userName: string, authResp: any }) {
+        return this.passkeyService.verifyPasskeyLogin(body.userName, body.authResp);
+    }
+
 }
