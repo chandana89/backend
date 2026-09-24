@@ -24,7 +24,7 @@ export class PasskeyService {
     const user = await this.userRepo.findOne({ where: { email: userName } });
     if (!user) throw new Error('Invalid user');
 
-    const passkeys = await this.passkeyRepo.find({ where: { user } });
+    const passkeys = await this.passkeyRepo.find({ where: { user: { id: user.id } } });
 
     const options = await generateRegistrationOptions({
       rpName: this.rpName,

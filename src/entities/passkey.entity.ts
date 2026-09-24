@@ -8,7 +8,14 @@ export class Passkey extends BaseEntity {
     @PrimaryGeneratedColumn('uuid')
     id: string;
 
-    @Column({ name:'credential_id', type: 'bytea' })
+    @Column({
+        name: 'credential_id',
+        type: 'bytea',
+        transformer: {
+            to: (value: string) => value && Buffer.from(value, 'utf8'),
+            from: (value: Buffer) => value && value.toString('utf8'),
+        },
+    })
     credentialID: string;
 
     @Column({ name:'public_key', type: 'bytea' })

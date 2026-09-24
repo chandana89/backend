@@ -19,4 +19,11 @@ export class AuthenticateService {
     if (!user) throw new Error(`Invalid credentials`);
     return user;
   }
+
+  public async Logout(userName: string) {
+    const user = await this.userRepo.findOne({ where: { email: userName } });
+    if (!user) throw new Error(`Invalid user`);
+    user.token = null;
+    await user.save();
+  }
 }

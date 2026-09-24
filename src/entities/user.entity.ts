@@ -14,8 +14,8 @@ export class User extends BaseEntity {
     @Column()
     public password: string;
 
-    @Column({ nullable: true })
-    public token: string;
+    @Column({ type: 'varchar', nullable: true })
+    public token: string | null;
 
     @BeforeInsert()
     emailToLowerCase() {

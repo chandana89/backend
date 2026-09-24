@@ -26,6 +26,7 @@ export class NotificationsService {
     async sendNotification(userName: string, title: string, body: string) {
         const user = await this.userRepo.findOne({ where: { email: userName } });
         if (!user) throw new Error(`Invalid user`);
+        if (!user.token) throw new Error(`User is logged out`);
 
         const message = {
             notification: { title, body },
