@@ -20,7 +20,6 @@ export class PasskeyController {
     /** Step 2 of registration: verifies the new credential and stores it as a passkey. */
     @Post('verify')
     async VerifyPasskeyRegistration(@Body() body: { userName:string, authResp: any}) {
-        console.log(body.authResp,"authresp")
         return this.passkeyService.verifyPasskeyRegistration(body.userName, body.authResp);
     }
 

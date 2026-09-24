@@ -1,6 +1,13 @@
 # Passkeys
 
-Users can register a passkey and then use it instead of their password to sign in. A passkey is a WebAuthn credential that the user unlocks with touch, facial recognition, a device password or a PIN.
+Users can register a passkey and then sign in with it **without typing an email or password**. A passkey is a WebAuthn credential that the user unlocks with touch, facial recognition, a device password or a PIN. On the login page, the user clicks **Sign in with passkey** and picks their passkey; the backend works out which account it belongs to.
+
+## Using passkeys
+
+1. **Register once:** sign in with your email and password, open **Passkey** in the top nav and click **Add Passkey**. Confirm with your fingerprint, face, PIN or device password.
+2. **Sign in:** on the login page, leave the email and password fields empty and click **Sign in with passkey**. Choose your passkey in the prompt and confirm. You're signed in to the account the passkey belongs to.
+
+A passkey is saved on the device (or synced by its password manager, such as iCloud Keychain or Google Password Manager). To sign in on another device, register a passkey there too.
 
 | Where | Code |
 | --- | --- |
@@ -101,7 +108,7 @@ WebAuthn only works in a secure context: HTTPS, or `localhost` during developmen
 - **Passkeys registered before sign-in became usernameless may not show up.** Those were created with `residentKey: 'preferred'`, so some devices stored them as non-discoverable. Remove them from the device and register again. Most platform authenticators (Apple, Windows Hello, Google Password Manager) create discoverable passkeys anyway.
 - **Sign-in challenges live in memory.** A backend restart cancels any sign-in in progress. If the backend runs on more than one instance, the challenge must be stored somewhere shared (a table or Redis), or verification fails whenever it lands on a different instance.
 - **Only built-in authenticators** (see `authenticatorAttachment` above).
-- **Debug logging:** the controller logs `authResp` and the service logs the full verification result on every registration.
+- **Debug logging:** the service logs the full verification result on every registration (`console.log` in `verifyPasskeyRegistration`).
 - **Error messages reveal accounts:** registration's `Invalid user` tells a caller whether an email has an account.
 
 ## Troubleshooting

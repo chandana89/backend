@@ -5,6 +5,7 @@ import { AuthenticateService } from './authenticate.service';
 export class AuthenicateController {
     constructor(private authService: AuthenticateService) { }
 
+    /** Password sign-in. Returns `{ user }` (the email), the same shape as `POST /passkey/login/verify`. */
     @Post('login')
     async Login(@Body() body: { userName: string, password: string }) {
         const user = await this.authService.Login(body.userName, body.password);

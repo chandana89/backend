@@ -60,6 +60,8 @@ export class PasskeyService {
 
     const passkeys = await this.passkeyRepo.find({ where: { user: { id: user.id } } });
 
+    // No `userID` is passed, so simplewebauthn generates a random user handle. It isn't
+    // stored: sign-in finds the account by credential ID instead.
     const options = await generateRegistrationOptions({
       rpName: this.rpName,
       rpID: this.rpID,
@@ -92,6 +94,7 @@ export class PasskeyService {
       throw new BadRequestException('No registration in progress');
     }
 
+    // Throws (surfacing as a 500) if the challenge, origin or RP ID doesn't match.
     const verification = await verifyRegistrationResponse({
       response: authResp,
       expectedChallenge: user.currentChallenge,
@@ -103,6 +106,8 @@ export class PasskeyService {
       throw new BadRequestException('Registration verification failed');
     }
 
+    // The new credential: its ID, public key, starting counter and transports are all
+    // needed to verify future sign-ins.
     const credential = verification.registrationInfo.credential;
     console.log(verification, "verification")
 
@@ -116,6 +121,7 @@ export class PasskeyService {
     passkey.credentialID = credentialID;
     passkey.publicKey = Buffer.from(credentialPublicKey);
     passkey.counter = counter;
+    // Browsers may omit transports; the column is nullable.
     passkey.transports = transports!;
 
     await passkey.save();
