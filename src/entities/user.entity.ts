@@ -25,4 +25,15 @@ export class User extends BaseEntity {
     /** Pending passkey registration challenge; cleared once used. */
     @Column({ type: 'varchar', nullable: true })
     currentChallenge: string | null;
+
+    /** When `currentChallenge` stops being accepted. */
+    @Column({ type: 'timestamptz', nullable: true })
+    currentChallengeExpiresAt: Date | null;
+
+    /**
+     * WebAuthn user handle (base64url), created on the first passkey registration and reused
+     * after that, so a device keeps one passkey entry per account instead of one per registration.
+     */
+    @Column({ type: 'varchar', nullable: true })
+    webauthnUserId: string | null;
 }
