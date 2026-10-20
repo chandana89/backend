@@ -22,7 +22,9 @@ Both registration and sign-in take two requests. The first returns options with 
 
 ## Sessions
 
-Password login (`POST /authenticate/login`) and passkey login (`POST /passkey/login/verify`) both return `{ user, token }`. `user` is the email; `token` is a random session token, valid for 12 hours. The frontend keeps both in session storage and sends the token as `Authorization: Bearer <token>` to endpoints that need a signed-in user. Only a SHA-256 hash of the token is stored in the `session` table. `POST /authenticate/logout` ends the session.
+Account creation (`POST /authenticate/register`, body `{ email, password }`), password login (`POST /authenticate/login`) and passkey login (`POST /passkey/login/verify`) both return `{ user, token }`. `user` is the email; `token` is a random session token, valid for 12 hours. The frontend keeps both in session storage and sends the token as `Authorization: Bearer <token>` to endpoints that need a signed-in user. Only a SHA-256 hash of the token is stored in the `session` table. `POST /authenticate/logout` ends the session.
+
+New accounts are created from the **Create account** page (`/register`, linked from the login page). The email must be valid and the password 8–128 characters; an email that's already registered gets `409 An account with this email already exists`. Validation errors come back as `400` with a list of messages. The endpoint shares sign-in's limit of 10 requests a minute per IP address.
 
 Passwords are stored as scrypt hashes. Passwords still stored in plain text are accepted once and replaced with a hash on that sign-in.
 
