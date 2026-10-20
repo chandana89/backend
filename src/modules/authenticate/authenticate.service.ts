@@ -1,7 +1,7 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from 'src/entities/user.entity';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { hashPassword, isHashed, verifyPassword } from './password';
 import { SessionService } from './session.service';
 
@@ -29,6 +29,31 @@ export class AuthenticateService {
     if (!isHashed(user.password)) {
       user.password = await hashPassword(password);
       await user.save();
+    }
+
+    const token = await this.sessionService.create(user);
+    return { user: user.email, token };
+  }
+
+  /**
+   * Creates an account for `email` with a scrypt-hashed `password`, starts a session and
+   * returns `{ user, token }`, the same shape as `Login`. Throws a 409 if the email is taken.
+   */
+  public async Register(email: string, password: string) {
+    const normalised = email.trim().toLowerCase();
+    if (await this.userRepo.exists({ where: { email: normalised } })) {
+      throw new ConflictException('An account with this email already exists');
+    }
+
+    const user = this.userRepo.create({ email: normalised, password: await hashPassword(password) });
+    try {
+      await this.userRepo.save(user);
+    } catch (e) {
+      // Two sign-ups for the same email at once: the unique constraint catches the second.
+      if (e instanceof QueryFailedError && (e as any).driverError?.code === '23505') {
+        throw new ConflictException('An account with this email already exists');
+      }
+      throw e;
     }
 
     const token = await this.sessionService.create(user);
