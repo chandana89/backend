@@ -1,20 +1,30 @@
-import { Controller, Post, Body } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Req, HttpCode } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { AuthenticateService } from './authenticate.service';
+import { AuthGuard } from './auth.guard';
+import { LoginDto } from './dto/login.dto';
 
 @Controller('authenticate')
 export class AuthenicateController {
     constructor(private authService: AuthenticateService) { }
 
-    /** Password sign-in. Returns `{ user }` (the email), the same shape as `POST /passkey/login/verify`. */
+    /**
+     * Password sign-in. Returns `{ user, token }`, the same shape as `POST /passkey/login/verify`.
+     * Send the token as `Authorization: Bearer <token>` to authenticated endpoints.
+     */
     @Post('login')
-    async Login(@Body() body: { userName: string, password: string }) {
-        const user = await this.authService.Login(body.userName, body.password);
-        return { user: user.email }
+    @UseGuards(ThrottlerGuard)
+    @Throttle({ default: { limit: 10, ttl: 60_000 } })
+    async Login(@Body() body: LoginDto) {
+        return this.authService.Login(body.userName, body.password);
     }
 
+    /** Ends the current session. */
     @Post('logout')
-    async Logout(@Body() body: { userName: string }) {
-        await this.authService.Logout(body.userName);
+    @HttpCode(200)
+    @UseGuards(AuthGuard)
+    async Logout(@Req() req: any) {
+        await this.authService.Logout(req.user, req.sessionToken);
         return { success: true }
     }
 }

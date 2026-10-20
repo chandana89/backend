@@ -1,36 +1,53 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
+  AuthenticationResponseJSON,
   generateAuthenticationOptions,
   generateRegistrationOptions,
+  RegistrationResponseJSON,
   verifyAuthenticationResponse,
   verifyRegistrationResponse,
 } from '@simplewebauthn/server';
+import { randomBytes } from 'crypto';
 import { Passkey } from 'src/entities/passkey.entity';
 import { User } from 'src/entities/user.entity';
 import { Repository } from 'typeorm';
+import { SessionService } from '../authenticate/session.service';
 
 /**
  * Registers passkeys and signs users in with them, using @simplewebauthn/server.
  *
- * The relying party (RP) settings come from the environment:
+ * The relying party (RP) settings come from the environment, and the app refuses to start
+ * without them:
  * - `RP_NAME`: display name shown in the browser's passkey prompt.
  * - `RP_ID`: domain passkeys are bound to (e.g. `localhost`); must match the frontend's host.
  * - `ORIGIN`: exact frontend origin, including scheme and port (e.g. `http://localhost:5173`).
  *
- * Registration challenges are stored in `user.currentChallenge`. Sign-in is usernameless:
+ * Registration challenges are stored on the user (`currentChallenge`). Sign-in is usernameless:
  * the user isn't known until the passkey is presented, so sign-in challenges are kept in
  * memory in `loginChallenges` instead.
  */
 @Injectable()
 export class PasskeyService {
 
-  private readonly rpName = process.env.RP_NAME || '';
-  private readonly rpID = process.env.RP_ID || '';
-  private readonly origin = process.env.ORIGIN || '';
+  private readonly logger = new Logger(PasskeyService.name);
 
-  /** How long a sign-in challenge stays valid. */
-  private readonly loginChallengeTTL = 5 * 60 * 1000;
+  private readonly rpName: string;
+  private readonly rpID: string;
+  private readonly origin: string;
+
+  /** How long a registration or sign-in challenge stays valid. */
+  private readonly challengeTTL = 5 * 60 * 1000;
+
+  /** Most pending sign-in challenges kept at once, so the map can't grow without limit. */
+  private readonly maxLoginChallenges = 10_000;
 
   /**
    * Pending sign-in challenges, mapped to their expiry time (ms since epoch). In memory, so
@@ -42,30 +59,46 @@ export class PasskeyService {
   constructor(
     @InjectRepository(Passkey) private passkeyRepo: Repository<Passkey>,
     @InjectRepository(User) private userRepo: Repository<User>,
+    private sessionService: SessionService,
   ) {
+    const missing = ['RP_NAME', 'RP_ID', 'ORIGIN'].filter(name => !process.env[name]?.trim());
+    if (missing.length) {
+      throw new Error(`Passkeys need ${missing.join(', ')} to be set in the environment`);
+    }
+    this.rpName = process.env.RP_NAME!.trim();
+    this.rpID = process.env.RP_ID!.trim();
+    this.origin = process.env.ORIGIN!.trim();
+  }
 
+  /** The signed-in user's passkeys, without key material. */
+  async listPasskeys(user: User) {
+    const passkeys = await this.passkeyRepo.find({
+      where: { user: { id: user.id } },
+      order: { createdAt: 'ASC' },
+    });
+    return passkeys.map(({ id, createdAt, transports }) => ({ id, createdAt, transports }));
   }
 
   /**
-   * Builds registration options for `userName` and saves the challenge on the user.
+   * Builds registration options for the signed-in user and saves the challenge on them.
    *
    * Passkeys the user already has go in `excludeCredentials`, so the same authenticator
    * can't be registered twice. `authenticatorAttachment: 'platform'` limits registration to
    * the device's built-in authenticator (Touch ID, Windows Hello, Android screen lock).
    * `residentKey: 'required'` makes the passkey discoverable, which usernameless sign-in needs.
    */
-  async getPasskeyRegistrationOptions(userName: string) {
-    const user = await this.userRepo.findOne({ where: { email: userName } });
-    if (!user) throw new BadRequestException('Invalid user');
-
+  async getPasskeyRegistrationOptions(user: User) {
     const passkeys = await this.passkeyRepo.find({ where: { user: { id: user.id } } });
 
-    // No `userID` is passed, so simplewebauthn generates a random user handle. It isn't
-    // stored: sign-in finds the account by credential ID instead.
+    if (!user.webauthnUserId) {
+      user.webauthnUserId = randomBytes(32).toString('base64url');
+    }
+
     const options = await generateRegistrationOptions({
       rpName: this.rpName,
       rpID: this.rpID,
       userName: user.email,
+      userID: Buffer.from(user.webauthnUserId, 'base64url'),
       attestationType: 'none',
       excludeCredentials: passkeys.map(passkey => ({
         id: passkey.credentialID,
@@ -73,12 +106,13 @@ export class PasskeyService {
       })),
       authenticatorSelection: {
         residentKey: 'required',
-        userVerification: 'preferred',
+        userVerification: 'required',
         authenticatorAttachment: 'platform',
       },
     });
 
     user.currentChallenge = options.challenge;
+    user.currentChallengeExpiresAt = new Date(Date.now() + this.challengeTTL);
     await this.userRepo.save(user);
 
     return options;
@@ -88,19 +122,30 @@ export class PasskeyService {
    * Verifies the browser's registration response against the saved challenge, origin and
    * RP ID, then stores the new credential (ID, public key, counter, transports).
    */
-  async verifyPasskeyRegistration(userName: string, authResp: any) {
-    const user = await this.userRepo.findOne({ where: { email: userName } });
-    if (!user || !user.currentChallenge) {
+  async verifyPasskeyRegistration(user: User, authResp: RegistrationResponseJSON) {
+    const challenge = user.currentChallenge;
+    const expiresAt = user.currentChallengeExpiresAt;
+    if (!challenge || !expiresAt || expiresAt < new Date()) {
       throw new BadRequestException('No registration in progress');
     }
 
-    // Throws (surfacing as a 500) if the challenge, origin or RP ID doesn't match.
-    const verification = await verifyRegistrationResponse({
-      response: authResp,
-      expectedChallenge: user.currentChallenge,
-      expectedOrigin: this.origin,
-      expectedRPID: this.rpID,
-    });
+    // The challenge is single-use, whether or not verification succeeds.
+    user.currentChallenge = null;
+    user.currentChallengeExpiresAt = null;
+    await this.userRepo.save(user);
+
+    let verification;
+    try {
+      verification = await verifyRegistrationResponse({
+        response: authResp,
+        expectedChallenge: challenge,
+        expectedOrigin: this.origin,
+        expectedRPID: this.rpID,
+      });
+    } catch (e: any) {
+      this.logger.warn(`Passkey registration failed for user ${user.id}: ${e?.message}`);
+      throw new BadRequestException('Registration verification failed');
+    }
 
     if (!verification.verified || !verification.registrationInfo) {
       throw new BadRequestException('Registration verification failed');
@@ -109,28 +154,29 @@ export class PasskeyService {
     // The new credential: its ID, public key, starting counter and transports are all
     // needed to verify future sign-ins.
     const credential = verification.registrationInfo.credential;
-    console.log(verification, "verification")
 
-    const credentialID = credential.id;
-    const credentialPublicKey = credential.publicKey;
-    const counter = credential.counter;
-    const transports = credential.transports;
+    if (await this.passkeyRepo.exists({ where: { credentialID: credential.id } })) {
+      throw new BadRequestException('This passkey is already registered');
+    }
 
     const passkey = new Passkey();
     passkey.user = user;
-    passkey.credentialID = credentialID;
-    passkey.publicKey = Buffer.from(credentialPublicKey);
-    passkey.counter = counter;
+    passkey.credentialID = credential.id;
+    passkey.publicKey = Buffer.from(credential.publicKey);
+    passkey.counter = credential.counter;
     // Browsers may omit transports; the column is nullable.
-    passkey.transports = transports!;
+    passkey.transports = credential.transports!;
 
-    await passkey.save();
-
-    // The challenge has been used; clear it so the response can't be replayed.
-    user.currentChallenge = null;
-    await user.save();
+    await this.passkeyRepo.save(passkey);
 
     return { verified: true };
+  }
+
+  /** Deletes one of `user`'s passkeys. Another user's passkey is reported as not found. */
+  async deletePasskey(user: User, id: string) {
+    const result = await this.passkeyRepo.delete({ id, user: { id: user.id } });
+    if (!result.affected) throw new NotFoundException('Passkey not found');
+    return { deleted: true };
   }
 
   /**
@@ -139,13 +185,17 @@ export class PasskeyService {
    * `loginChallenges` until it is used or expires.
    */
   async getPasskeyLoginOptions() {
+    this.pruneLoginChallenges();
+    if (this.loginChallenges.size >= this.maxLoginChallenges) {
+      throw new ServiceUnavailableException('Too many sign-in attempts, please try again shortly');
+    }
+
     const options = await generateAuthenticationOptions({
       rpID: this.rpID,
-      userVerification: 'preferred',
+      userVerification: 'required',
     });
 
-    this.pruneLoginChallenges();
-    this.loginChallenges.set(options.challenge, Date.now() + this.loginChallengeTTL);
+    this.loginChallenges.set(options.challenge, Date.now() + this.challengeTTL);
 
     return options;
   }
@@ -154,9 +204,10 @@ export class PasskeyService {
    * Verifies a usernameless sign-in response. The challenge is read from the response's
    * `clientDataJSON` and must be one this server issued and hasn't used. The passkey, and
    * with it the user, is looked up by the credential ID the browser returned; its signature
-   * is then checked with the stored public key. Returns `{ user }`, matching password login.
+   * is then checked with the stored public key. Starts a session and returns `{ user, token }`,
+   * matching password login.
    */
-  async verifyPasskeyLogin(authResp: any) {
+  async verifyPasskeyLogin(authResp: AuthenticationResponseJSON) {
     const challenge = this.readChallenge(authResp);
     const expiresAt = challenge ? this.loginChallenges.get(challenge) : undefined;
     if (!challenge || !expiresAt || expiresAt < Date.now()) {
@@ -192,7 +243,8 @@ export class PasskeyService {
         },
       });
     } catch (e: any) {
-      throw new UnauthorizedException(e?.message || 'Passkey verification failed');
+      this.logger.warn(`Passkey sign-in failed for passkey ${passkey.id}: ${e?.message}`);
+      throw new UnauthorizedException('Passkey verification failed');
     }
 
     if (!verification.verified) {
@@ -201,13 +253,14 @@ export class PasskeyService {
 
     // simplewebauthn rejects a counter that goes backwards, which can indicate a cloned authenticator.
     passkey.counter = verification.authenticationInfo.newCounter;
-    await passkey.save();
+    await this.passkeyRepo.save(passkey);
 
-    return { user: passkey.user.email };
+    const token = await this.sessionService.create(passkey.user);
+    return { user: passkey.user.email, token };
   }
 
   /** Extracts the challenge the browser signed from a WebAuthn response's clientDataJSON. */
-  private readChallenge(authResp: any): string | undefined {
+  private readChallenge(authResp: AuthenticationResponseJSON): string | undefined {
     try {
       const clientData = JSON.parse(
         Buffer.from(authResp.response.clientDataJSON, 'base64url').toString('utf8'),

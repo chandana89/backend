@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn, BaseEntity, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, BaseEntity, ManyToOne, JoinColumn, CreateDateColumn } from 'typeorm';
 import { User } from './user.entity';
 import { AuthenticatorTransportFuture } from '@simplewebauthn/server';
 
@@ -16,6 +16,7 @@ export class Passkey extends BaseEntity {
     @Column({
         name: 'credential_id',
         type: 'bytea',
+        unique: true,
         transformer: {
             to: (value: string) => value && Buffer.from(value, 'utf8'),
             from: (value: Buffer) => value && value.toString('utf8'),
@@ -39,7 +40,11 @@ export class Passkey extends BaseEntity {
     })
     transports: AuthenticatorTransportFuture[];
 
-    @ManyToOne(() => User)
+    @CreateDateColumn({ name: 'created_at', type: 'timestamptz' })
+    createdAt: Date;
+
+    /** Owner. Their passkeys are deleted with them. */
+    @ManyToOne(() => User, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'user_id' })
     user: User;
 }
